@@ -2,20 +2,24 @@ import {
   BodyLayout,
   Button,
   Card,
+  FlexLayout,
   Grid,
   PageHeader,
   Tabs,
 } from "@cedcommerce/ounce-ui";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { PlusCircle } from "react-feather";
 
 const Main = () => {
   const [team, setTeam] = useState([]);
   const [selected, setSelected] = useState();
 
   const [members, setMembers] = useState([]);
+  const [countMember, setCountMember] = useState(2);
   const [memLoading, setMemLoading] = useState(false);
 
   const [repo, setRepo] = useState([]);
+  const [countRepo, setCountRepo] = useState(1);
   const [repoLoading, setRepoLoading] = useState(false);
 
   const requestOptions = {
@@ -25,6 +29,7 @@ const Main = () => {
   };
   const baseUrl = "https://api.github.com";
 
+  // TEAM DATA
   async function teamFetch() {
     const response = await fetch(
       `${baseUrl}/orgs/${process.env.REACT_APP_ORG}/teams/${process.env.REACT_APP_PARENT}/teams`,
@@ -56,36 +61,58 @@ const Main = () => {
 
   useEffect(() => {
     if (selected) {
-      // MEMBERS OF TEAM
-      setMemLoading(true);
-      fetch(`${baseUrl}/teams/${selected}/members`, requestOptions)
-        .then((res) => res.json())
-        .then((actualData) => setMembers(actualData))
-        .finally(() => setMemLoading(false));
-
-      // REPOSITORIES OF TEAM
-      setRepoLoading(true);
-      fetch(`${baseUrl}/teams/${selected}/repos`, requestOptions)
-        .then((res) => res.json())
-        .then((actualData) => {
-          const tempRepo = actualData.map((item) => ({
-            key: item.id,
-            id: item.id,
-            name: item.name,
-            repo_url: item.repos_url,
-            role_name: item.role_name,
-            visibility: item.visibility,
-          }));
-          setRepo([...tempRepo]);
-        })
-        .finally(() => setRepoLoading(false));
+      memberFetch(countMember);
+      repoFetch(countRepo);
     }
   }, [selected]);
 
-  const teamChange = (event) => {
-    setSelected(event);
+  // REPOSITORIES OF TEAM
+  const repoFetch = (count) => {
+    setRepoLoading(true);
+    fetch(
+      `${baseUrl}/teams/${selected}/repos?per_page=${count}`,
+      requestOptions
+    )
+      .then((res) => res.json())
+      .then((actualData) => {
+        const tempRepo = actualData.map((item) => ({
+          key: item.id,
+          id: item.id,
+          name: item.name,
+          repo_url: item.repos_url,
+          role_name: item.role_name,
+          visibility: item.visibility,
+        }));
+        setRepo([...tempRepo]);
+      })
+      .finally(() => setRepoLoading(false));
   };
 
+  const viewMoreRepo = () => {
+    let count = countRepo;
+    repoFetch(count + 2);
+    setCountRepo(countRepo + 2);
+  };
+
+  // MEMBERS OF TEAM
+  const memberFetch = (count) => {
+    setMemLoading(true);
+    fetch(
+      `${baseUrl}/teams/${selected}/members?per_page=${count}`,
+      requestOptions
+    )
+      .then((res) => res.json())
+      .then((actualData) => setMembers(actualData))
+      .finally(() => setMemLoading(false));
+  };
+
+  const viewMoreMember = () => {
+    let count = countMember;
+    memberFetch(count + 2);
+    setCountMember(countMember + 2);
+  };
+
+  // MEMBERSHIP OF MEMBERS
   const viewMembership = (name) => {
     fetch(`${baseUrl}/teams/${selected}/memberships/${name}`, requestOptions)
       .then((res) => res.json())
@@ -98,6 +125,10 @@ const Main = () => {
         });
         setMembers([...tempMem]);
       });
+  };
+
+  const teamChange = (event) => {
+    setSelected(event);
   };
 
   return (
@@ -113,10 +144,8 @@ const Main = () => {
             selected={selected}
             value={team}
           >
-            <hr />
             <Card>
-              <Card>
-                <h2>Members: </h2>
+              <Card title="Members:" cardType="Bordered">
                 <Grid
                   loading={memLoading}
                   columns={[
@@ -165,10 +194,19 @@ const Main = () => {
                       : []
                   }
                 />
+                <div className="mt-20 inte-Align--right">
+                  <FlexLayout halign="center">
+                    <Button
+                      type="Outlined"
+                      onClick={viewMoreMember}
+                      content="Show More"
+                      icon={<PlusCircle color="#5C5F62" />}
+                    ></Button>
+                  </FlexLayout>
+                </div>
               </Card>
 
-              <Card>
-                <h2>Repositories:</h2>
+              <Card title="Repositories:" cardType="Bordered">
                 <Grid
                   loading={repoLoading}
                   columns={[
@@ -196,6 +234,16 @@ const Main = () => {
                   ]}
                   dataSource={repo}
                 />
+                <div className="mt-20">
+                  <FlexLayout halign="center">
+                    <Button
+                      type="Outlined"
+                      onClick={viewMoreRepo}
+                      content="Show More"
+                      icon={<PlusCircle color="#5C5F62" />}
+                    ></Button>
+                  </FlexLayout>
+                </div>
               </Card>
             </Card>
           </Tabs>
