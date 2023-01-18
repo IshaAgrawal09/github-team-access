@@ -4,23 +4,32 @@ import {
   Card,
   FlexLayout,
   Grid,
+  Modal,
   PageHeader,
+  Skeleton,
   Tabs,
 } from "@cedcommerce/ounce-ui";
 import React, { useEffect, useState } from "react";
-import { PlusCircle } from "react-feather";
+import { List, PlusCircle } from "react-feather";
 
-const Main = () => {
+const Main = ({ perPage }) => {
   const [team, setTeam] = useState([]);
   const [selected, setSelected] = useState();
 
   const [members, setMembers] = useState([]);
-  const [countMember, setCountMember] = useState(2);
+  const [countMember, setCountMember] = useState(perPage);
+  const [totalMemberLength, setTotalMemberLength] = useState(0);
   const [memLoading, setMemLoading] = useState(false);
 
   const [repo, setRepo] = useState([]);
-  const [countRepo, setCountRepo] = useState(1);
+  const [countRepo, setCountRepo] = useState(perPage);
+  const [totalRepoLength, setTotalRepoLength] = useState(0);
   const [repoLoading, setRepoLoading] = useState(false);
+
+  const [openModal, setOpenModal] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [repoCollaborator, setRepoCollaborator] = useState([]);
+  const [loadingCollaborator, setLoadingCollaborator] = useState(false);
 
   const requestOptions = {
     headers: {
@@ -29,7 +38,7 @@ const Main = () => {
   };
   const baseUrl = "https://api.github.com";
 
-  // TEAM DATA
+  // DATA OF ALL TEAMS
   async function teamFetch() {
     const response = await fetch(
       `${baseUrl}/orgs/${process.env.REACT_APP_ORG}/teams/${process.env.REACT_APP_PARENT}/teams`,
@@ -61,7 +70,14 @@ const Main = () => {
 
   useEffect(() => {
     if (selected) {
+      fetch(`${baseUrl}/teams/${selected}/members`, requestOptions)
+        .then((res) => res.json())
+        .then((data) => setTotalMemberLength(data.length));
       memberFetch(countMember);
+
+      fetch(`${baseUrl}/teams/${selected}/repos`, requestOptions)
+        .then((res) => res.json())
+        .then((data) => setTotalRepoLength(data.length));
       repoFetch(countRepo);
     }
   }, [selected]);
@@ -75,23 +91,36 @@ const Main = () => {
     )
       .then((res) => res.json())
       .then((actualData) => {
-        const tempRepo = actualData.map((item) => ({
-          key: item.id,
-          id: item.id,
-          name: item.name,
-          repo_url: item.repos_url,
-          role_name: item.role_name,
-          visibility: item.visibility,
-        }));
-        setRepo([...tempRepo]);
+        setRepo(actualData);
       })
       .finally(() => setRepoLoading(false));
   };
 
   const viewMoreRepo = () => {
     let count = countRepo;
-    repoFetch(count + 2);
-    setCountRepo(countRepo + 2);
+    repoFetch(count + perPage);
+    setCountRepo(countRepo + perPage);
+  };
+
+  const viewCollaborator = (name) => {
+    setSelectedRepo(name);
+    setLoadingCollaborator(true);
+    fetch(
+      `${baseUrl}/repos/${process.env.REACT_APP_ORG}/${name}/collaborators`,
+      requestOptions
+    )
+      .then((res) => res.json())
+      .then((result) => {
+        const temp = result.map((item, index) => {
+          return {
+            key: index,
+            name: item.login,
+          };
+        });
+        setRepoCollaborator(temp);
+      })
+      .finally(() => setLoadingCollaborator(false));
+    setOpenModal(true);
   };
 
   // MEMBERS OF TEAM
@@ -108,8 +137,8 @@ const Main = () => {
 
   const viewMoreMember = () => {
     let count = countMember;
-    memberFetch(count + 2);
-    setCountMember(countMember + 2);
+    memberFetch(count + perPage);
+    setCountMember(countMember + perPage);
   };
 
   // MEMBERSHIP OF MEMBERS
@@ -137,7 +166,6 @@ const Main = () => {
         <Card>
           <PageHeader title="Teams:"></PageHeader>
           <Tabs
-            className="main-tab"
             alignment="horizontal"
             animate="type1"
             onChange={(event) => teamChange(event)}
@@ -145,9 +173,9 @@ const Main = () => {
             value={team}
           >
             <Card>
-              <Card title="Members:" cardType="Bordered">
+              <Card title="Team Repositories:" cardType="Bordered">
                 <Grid
-                  loading={memLoading}
+                  loading={repoLoading}
                   columns={[
                     {
                       align: "center",
@@ -160,8 +188,90 @@ const Main = () => {
                       align: "center",
                       dataIndex: "repo_url",
                       key: "repo_url",
-                      title: "repo_url",
+                      title: "Repo URL",
+                      width: 200,
+                    },
+                    {
+                      align: "center",
+                      dataIndex: "role_name",
+                      key: "role_name",
+                      title: "Repo Access Level",
                       width: 100,
+                    },
+                    {
+                      align: "center",
+                      dataIndex: "visibility",
+                      key: "visibility",
+                      title: "Repo Visibility",
+                      width: 100,
+                    },
+                    {
+                      align: "center",
+                      dataIndex: "collaborators",
+                      key: "collaborators",
+                      title: "Collaborators",
+                      width: 100,
+                    },
+                  ]}
+                  dataSource={
+                    repo.length
+                      ? repo.map((item) => {
+                          return {
+                            key: item.id,
+                            id: item.id,
+                            name: item.name,
+                            repo_url: (
+                              <a href={item.html_url} target="_blank">
+                                {item.html_url}
+                              </a>
+                            ),
+                            role_name: item.role_name,
+                            visibility: item.visibility,
+                            collaborators: (
+                              <Button
+                                type="TextButton"
+                                halign="Center"
+                                content="list"
+                                icon={<List />}
+                                length="fullBtn"
+                                onClick={() => viewCollaborator(item.name)}
+                              ></Button>
+                            ),
+                          };
+                        })
+                      : []
+                  }
+                />
+                {repo.length < totalRepoLength ? (
+                  <div className="mt-20">
+                    <FlexLayout halign="center">
+                      <Button
+                        type="Outlined"
+                        onClick={viewMoreRepo}
+                        content="Show More"
+                        icon={<PlusCircle color="#5C5F62" />}
+                      ></Button>
+                    </FlexLayout>
+                  </div>
+                ) : null}
+              </Card>
+              <Card title="Team Members:" cardType="Bordered">
+                <Grid
+                  loading={memLoading}
+                  columns={[
+                    {
+                      align: "center",
+                      dataIndex: "name",
+                      key: "name",
+                      title: "Name",
+                      width: 100,
+                    },
+                    {
+                      align: "center",
+                      dataIndex: "github_url",
+                      key: "github_url",
+                      title: "GitHub URL",
+                      width: 200,
                     },
                     {
                       align: "center",
@@ -178,9 +288,9 @@ const Main = () => {
                             key: item.id,
                             id: item.id,
                             name: item.login,
-                            repo_url: (
-                              <a target="_blank" href={item.repos_url}>
-                                {item.repos_url}
+                            github_url: (
+                              <a target="_blank" href={item.html_url}>
+                                {item.html_url}
                               </a>
                             ),
                             role: item.role ?? (
@@ -194,60 +304,59 @@ const Main = () => {
                       : []
                   }
                 />
-                <div className="mt-20 inte-Align--right">
-                  <FlexLayout halign="center">
-                    <Button
-                      type="Outlined"
-                      onClick={viewMoreMember}
-                      content="Show More"
-                      icon={<PlusCircle color="#5C5F62" />}
-                    ></Button>
-                  </FlexLayout>
-                </div>
-              </Card>
-
-              <Card title="Repositories:" cardType="Bordered">
-                <Grid
-                  loading={repoLoading}
-                  columns={[
-                    {
-                      align: "center",
-                      dataIndex: "name",
-                      key: "name",
-                      title: "Name",
-                      width: 100,
-                    },
-                    {
-                      align: "center",
-                      dataIndex: "role_name",
-                      key: "role_name",
-                      title: "Repo Access Level",
-                      width: 100,
-                    },
-                    {
-                      align: "center",
-                      dataIndex: "visibility",
-                      key: "visibility",
-                      title: "Repo Visibility",
-                      width: 100,
-                    },
-                  ]}
-                  dataSource={repo}
-                />
-                <div className="mt-20">
-                  <FlexLayout halign="center">
-                    <Button
-                      type="Outlined"
-                      onClick={viewMoreRepo}
-                      content="Show More"
-                      icon={<PlusCircle color="#5C5F62" />}
-                    ></Button>
-                  </FlexLayout>
-                </div>
+                {members.length < totalMemberLength ? (
+                  <div className="mt-20">
+                    <FlexLayout halign="center">
+                      <Button
+                        type="Outlined"
+                        onClick={viewMoreMember}
+                        content="Show More"
+                        icon={<PlusCircle color="#5C5F62" />}
+                      ></Button>
+                    </FlexLayout>
+                  </div>
+                ) : null}
               </Card>
             </Card>
           </Tabs>
         </Card>
+        <Modal
+          open={openModal}
+          close={() => setOpenModal(false)}
+          heading={`Collaborators( ${selectedRepo} )`}
+          modalSize="small"
+          secondaryAction={{
+            content: "Close",
+            loading: false,
+            onClick: () => setOpenModal(false),
+          }}
+        >
+          {loadingCollaborator ? (
+            <Card>
+              <Skeleton
+                height="50px"
+                line={3}
+                rounded="50%"
+                type="line"
+                width="50px"
+              />
+            </Card>
+          ) : (
+            <Grid
+              showHeader={false}
+              columns={[
+                {
+                  align: "center",
+                  dataIndex: "name",
+                  key: "name",
+                  title: "Name",
+                  width: 100,
+                },
+              ]}
+              dataSource={repoCollaborator}
+            />
+          )}
+        </Modal>
       </BodyLayout>
     </>
   );

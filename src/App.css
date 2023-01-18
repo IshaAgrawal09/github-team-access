@@ -1,3 +1,6 @@
 .main-tab {
   background-color: #808080;
 }
+.ant-table-content {
+  overflow: auto;
+}
