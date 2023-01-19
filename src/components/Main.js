@@ -2,27 +2,31 @@ import {
   BodyLayout,
   Button,
   Card,
+  FlexChild,
   FlexLayout,
   Grid,
   Modal,
   PageHeader,
+  Select,
   Skeleton,
   Tabs,
 } from "@cedcommerce/ounce-ui";
 import React, { useEffect, useState } from "react";
 import { List, PlusCircle } from "react-feather";
 
-const Main = ({ perPage }) => {
+const Main = () => {
   const [team, setTeam] = useState([]);
   const [selected, setSelected] = useState();
+  const [teamType, setTeamType] = useState("Child");
+  const [perPageData, setPerPageData] = useState(5);
 
   const [members, setMembers] = useState([]);
-  const [countMember, setCountMember] = useState(perPage);
+  const [countMember, setCountMember] = useState(5);
   const [totalMemberLength, setTotalMemberLength] = useState(0);
   const [memLoading, setMemLoading] = useState(false);
 
   const [repo, setRepo] = useState([]);
-  const [countRepo, setCountRepo] = useState(perPage);
+  const [countRepo, setCountRepo] = useState(5);
   const [totalRepoLength, setTotalRepoLength] = useState(0);
   const [repoLoading, setRepoLoading] = useState(false);
 
@@ -48,23 +52,33 @@ const Main = ({ perPage }) => {
     return data;
   }
 
+  async function parentTeamFetch() {
+    const response = await fetch(
+      `${baseUrl}/orgs/${process.env.REACT_APP_ORG}/teams/${process.env.REACT_APP_PARENT}`,
+      requestOptions
+    );
+    const data = await response.json();
+    return data;
+  }
+
   useEffect(() => {
     teamFetch().then((actualData) => {
-      let tempTeam = [];
-      actualData.map((item) =>
-        tempTeam.push({
-          key: item.id,
-          id: item.id,
-          content:
-            item.parent === null
-              ? item.name + "( Parent )"
-              : item.name + "( Child )",
-          slug: item.slug,
-          description: item.description,
-        })
-      );
-      setSelected(tempTeam[0].id);
-      setTeam([...tempTeam]);
+      const tempChildTeam = actualData.map((item) => {
+        return item;
+      });
+
+      if (tempChildTeam.length === 0) {
+        parentTeamFetch().then((res) => {
+          setTeamType("Parent");
+          let parentTeam = [];
+          parentTeam.push(res);
+          setSelected(parentTeam[0].id);
+          setTeam(parentTeam);
+        });
+      } else {
+        setTeam(tempChildTeam);
+        setSelected(tempChildTeam[0].id);
+      }
     });
   }, []);
 
@@ -94,12 +108,6 @@ const Main = ({ perPage }) => {
         setRepo(actualData);
       })
       .finally(() => setRepoLoading(false));
-  };
-
-  const viewMoreRepo = () => {
-    let count = countRepo;
-    repoFetch(count + perPage);
-    setCountRepo(countRepo + perPage);
   };
 
   const viewCollaborator = (name) => {
@@ -135,12 +143,6 @@ const Main = ({ perPage }) => {
       .finally(() => setMemLoading(false));
   };
 
-  const viewMoreMember = () => {
-    let count = countMember;
-    memberFetch(count + perPage);
-    setCountMember(countMember + perPage);
-  };
-
   // MEMBERSHIP OF MEMBERS
   const viewMembership = (name) => {
     fetch(`${baseUrl}/teams/${selected}/memberships/${name}`, requestOptions)
@@ -164,16 +166,62 @@ const Main = ({ perPage }) => {
     <>
       <BodyLayout>
         <Card>
-          <PageHeader title="Teams:"></PageHeader>
+          <FlexLayout halign="fill" valign="center">
+            <FlexChild>
+              <PageHeader title="Teams:"></PageHeader>
+            </FlexChild>
+            <FlexChild>
+              <Select
+                labelInLine
+                name="Per Page Rows"
+                onChange={(val) => {
+                  repoFetch(val);
+                  memberFetch(val);
+                  setCountRepo(val);
+                  setCountMember(val);
+                  setPerPageData(val);
+                }}
+                value={perPageData}
+                options={[
+                  {
+                    label: "5",
+                    value: 5,
+                  },
+                  {
+                    label: "10",
+                    value: 10,
+                  },
+                  {
+                    label: "25",
+                    value: 25,
+                  },
+                  {
+                    label: "50",
+                    value: 50,
+                  },
+                ]}
+                placeholder="Select"
+                popoverContainer="body"
+                thickness="thick"
+              />
+            </FlexChild>
+          </FlexLayout>
+
           <Tabs
             alignment="horizontal"
             animate="type1"
             onChange={(event) => teamChange(event)}
             selected={selected}
-            value={team}
+            value={team.map((item) => {
+              return {
+                key: item.id,
+                id: item.id,
+                content: item.name + "( " + teamType + " )",
+              };
+            })}
           >
             <Card>
-              <Card title="Team Repositories:" cardType="Bordered">
+              <Card cardType="Bordered" title="Team Repositories:">
                 <Grid
                   loading={repoLoading}
                   columns={[
@@ -230,7 +278,6 @@ const Main = ({ perPage }) => {
                             collaborators: (
                               <Button
                                 type="TextButton"
-                                halign="Center"
                                 content="list"
                                 icon={<List />}
                                 length="fullBtn"
@@ -247,7 +294,10 @@ const Main = ({ perPage }) => {
                     <FlexLayout halign="center">
                       <Button
                         type="Outlined"
-                        onClick={viewMoreRepo}
+                        onClick={() => {
+                          repoFetch(countRepo + 5);
+                          setCountRepo(countRepo + 5);
+                        }}
                         content="Show More"
                         icon={<PlusCircle color="#5C5F62" />}
                       ></Button>
@@ -255,7 +305,7 @@ const Main = ({ perPage }) => {
                   </div>
                 ) : null}
               </Card>
-              <Card title="Team Members:" cardType="Bordered">
+              <Card cardType="Bordered" title="Team Members:">
                 <Grid
                   loading={memLoading}
                   columns={[
@@ -270,7 +320,7 @@ const Main = ({ perPage }) => {
                       align: "center",
                       dataIndex: "github_url",
                       key: "github_url",
-                      title: "GitHub URL",
+                      title: "Member Profile URL",
                       width: 200,
                     },
                     {
@@ -294,8 +344,7 @@ const Main = ({ perPage }) => {
                               </a>
                             ),
                             role: item.role ?? (
-                              <Button type="TextButton">
-                                Loading...
+                              <Button type="TextButton" content="Loading...">
                                 {viewMembership(item.login)}
                               </Button>
                             ),
@@ -309,7 +358,10 @@ const Main = ({ perPage }) => {
                     <FlexLayout halign="center">
                       <Button
                         type="Outlined"
-                        onClick={viewMoreMember}
+                        onClick={() => {
+                          memberFetch(countMember + 5);
+                          setCountMember(countMember + 5);
+                        }}
                         content="Show More"
                         icon={<PlusCircle color="#5C5F62" />}
                       ></Button>
@@ -327,7 +379,6 @@ const Main = ({ perPage }) => {
           modalSize="small"
           secondaryAction={{
             content: "Close",
-            loading: false,
             onClick: () => setOpenModal(false),
           }}
         >
